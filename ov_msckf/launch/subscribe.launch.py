@@ -18,6 +18,7 @@ from launch.actions import DeclareLaunchArgument, LogInfo, OpaqueFunction, Execu
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, TextSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from ament_index_python.packages import get_package_share_directory, get_package_prefix
 import os
 import sys
@@ -44,6 +45,11 @@ launch_args = [
         name="verbosity",
         default_value="INFO",
         description="ALL, DEBUG, INFO, WARNING, ERROR, SILENT",
+    ),
+    DeclareLaunchArgument(
+        name="use_sim_time",
+        default_value="true",
+        description="use simulation time",
     ),
     DeclareLaunchArgument(
         name="use_stereo",
@@ -179,11 +185,11 @@ def launch_setup(context):
         output='screen',
         parameters=[
             {"verbosity": LaunchConfiguration("verbosity")},
-            {"use_stereo": LaunchConfiguration("use_stereo")},
-            {"max_cameras": LaunchConfiguration("max_cameras")},
-            {"save_total_state": LaunchConfiguration("save_total_state")},
+            {"use_stereo": ParameterValue(LaunchConfiguration("use_stereo"), value_type=bool)},
+            {"max_cameras": ParameterValue(LaunchConfiguration("max_cameras"), value_type=int)},
+            {"save_total_state": ParameterValue(LaunchConfiguration("save_total_state"), value_type=bool)},
             {"config_path": config_path},
-            {"record_timing_information": LaunchConfiguration("dotime")},
+            {"record_timing_information": ParameterValue(LaunchConfiguration("dotime"), value_type=bool)},
             {"record_timing_filepath": LaunchConfiguration("path_time")},
         ],
     )

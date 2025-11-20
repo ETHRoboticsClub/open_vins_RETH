@@ -87,26 +87,45 @@ int main(int argc, char **argv) {
   // Verbosity setting
   ov_core::Printer::setPrintLevel("INFO");
 
+  // Parse command line arguments for save option
+  std::string save_prefix = "";
+  std::vector<std::string> file_args;
+  for (int i = 1; i < argc; i++) {
+    std::string arg = argv[i];
+    if (arg == "--save" || arg == "-s") {
+      if (i + 1 < argc) {
+        save_prefix = argv[i + 1];
+        i++; // Skip the next argument as it's the prefix value
+      } else {
+        PRINT_ERROR(RED "ERROR: --save requires a prefix argument\n" RESET);
+        std::exit(EXIT_FAILURE);
+      }
+    } else {
+      file_args.push_back(arg);
+    }
+  }
+
   // Ensure we have a path
-  if (argc < 4) {
+  if (file_args.size() < 3) {
     PRINT_ERROR(RED "ERROR: Please specify a align mode, groudtruth, and algorithm run file\n" RESET);
-    PRINT_ERROR(RED "ERROR: ./error_singlerun <align_mode> <file_gt.txt> <file_est.txt>\n" RESET);
-    PRINT_ERROR(RED "ERROR: rosrun ov_eval error_singlerun <align_mode> <file_gt.txt> <file_est.txt>\n" RESET);
+    PRINT_ERROR(RED "ERROR: ./error_singlerun <align_mode> <file_gt.txt> <file_est.txt> [--save <prefix>]\n" RESET);
+    PRINT_ERROR(RED "ERROR: rosrun ov_eval error_singlerun <align_mode> <file_gt.txt> <file_est.txt> [--save <prefix>]\n" RESET);
+    PRINT_ERROR(RED "ERROR: If --save is provided, figures will be saved with the given prefix\n" RESET);
     std::exit(EXIT_FAILURE);
   }
 
   // Load it!
-  boost::filesystem::path path_gt(argv[2]);
+  boost::filesystem::path path_gt(file_args[1]);
   std::vector<double> times;
   std::vector<Eigen::Matrix<double, 7, 1>> poses;
   std::vector<Eigen::Matrix3d> cov_ori, cov_pos;
-  ov_eval::Loader::load_data(argv[2], times, poses, cov_ori, cov_pos);
+  ov_eval::Loader::load_data(file_args[1].c_str(), times, poses, cov_ori, cov_pos);
   // Print its length and stats
   double length = ov_eval::Loader::get_total_length(poses);
   PRINT_DEBUG("[COMP]: %d poses in %s => length of %.2f meters\n", (int)times.size(), path_gt.stem().string().c_str(), length);
 
   // Create our trajectory object
-  ov_eval::ResultTrajectory traj(argv[3], argv[2], argv[1]);
+  ov_eval::ResultTrajectory traj(file_args[2].c_str(), file_args[1].c_str(), file_args[0].c_str());
 
   //===========================================================
   // Absolute trajectory error
@@ -173,6 +192,17 @@ int main(int argc, char **argv) {
   matplotlibcpp::ylabel("orientation error (deg)");
   matplotlibcpp::xlabel("sub-segment lengths (m)");
   matplotlibcpp::tight_layout();
+  if (!save_prefix.empty()) {
+    std::string filename = save_prefix + "_rpe_orientation.png";
+    // Create directory if it doesn't exist
+    boost::filesystem::path filepath(filename);
+    boost::filesystem::path parent = filepath.parent_path();
+    if (!parent.empty() && parent.string() != ".") {
+      boost::filesystem::create_directories(parent);
+    }
+    matplotlibcpp::save(filename);
+    PRINT_INFO("Saved Relative Orientation Error plot to: %s\n", filename.c_str());
+  }
   matplotlibcpp::show(false);
 
   // Plot this figure
@@ -191,6 +221,17 @@ int main(int argc, char **argv) {
   matplotlibcpp::ylabel("translation error (m)");
   matplotlibcpp::xlabel("sub-segment lengths (m)");
   matplotlibcpp::tight_layout();
+  if (!save_prefix.empty()) {
+    std::string filename = save_prefix + "_rpe_position.png";
+    // Create directory if it doesn't exist
+    boost::filesystem::path filepath(filename);
+    boost::filesystem::path parent = filepath.parent_path();
+    if (!parent.empty() && parent.string() != ".") {
+      boost::filesystem::create_directories(parent);
+    }
+    matplotlibcpp::save(filename);
+    PRINT_INFO("Saved Relative Position Error plot to: %s\n", filename.c_str());
+  }
   matplotlibcpp::show(false);
 
 #endif
@@ -250,6 +291,17 @@ int main(int argc, char **argv) {
 
     // Display to the user
     matplotlibcpp::tight_layout();
+    if (!save_prefix.empty()) {
+      std::string filename = save_prefix + "_nees.png";
+      // Create directory if it doesn't exist
+      boost::filesystem::path filepath(filename);
+      boost::filesystem::path parent = filepath.parent_path();
+      if (!parent.empty() && parent.string() != ".") {
+        boost::filesystem::create_directories(parent);
+      }
+      matplotlibcpp::save(filename);
+      PRINT_INFO("Saved NEES plot to: %s\n", filename.c_str());
+    }
     matplotlibcpp::show(false);
   }
 
@@ -302,6 +354,17 @@ int main(int argc, char **argv) {
 
   // Display to the user
   matplotlibcpp::tight_layout();
+  if (!save_prefix.empty()) {
+    std::string filename = save_prefix + "_error_position.png";
+    // Create directory if it doesn't exist
+    boost::filesystem::path filepath(filename);
+    boost::filesystem::path parent = filepath.parent_path();
+    if (!parent.empty() && parent.string() != ".") {
+      boost::filesystem::create_directories(parent);
+    }
+    matplotlibcpp::save(filename);
+    PRINT_INFO("Saved Position Error plot to: %s\n", filename.c_str());
+  }
   matplotlibcpp::show(false);
 
   //=====================================================
@@ -324,6 +387,17 @@ int main(int argc, char **argv) {
 
   // Display to the user
   matplotlibcpp::tight_layout();
+  if (!save_prefix.empty()) {
+    std::string filename = save_prefix + "_error_orientation.png";
+    // Create directory if it doesn't exist
+    boost::filesystem::path filepath(filename);
+    boost::filesystem::path parent = filepath.parent_path();
+    if (!parent.empty() && parent.string() != ".") {
+      boost::filesystem::create_directories(parent);
+    }
+    matplotlibcpp::save(filename);
+    PRINT_INFO("Saved Orientation Error plot to: %s\n", filename.c_str());
+  }
   matplotlibcpp::show(false);
 
   //=====================================================
@@ -346,6 +420,17 @@ int main(int argc, char **argv) {
 
   // Display to the user
   matplotlibcpp::tight_layout();
+  if (!save_prefix.empty()) {
+    std::string filename = save_prefix + "_error_rpy.png";
+    // Create directory if it doesn't exist
+    boost::filesystem::path filepath(filename);
+    boost::filesystem::path parent = filepath.parent_path();
+    if (!parent.empty() && parent.string() != ".") {
+      boost::filesystem::create_directories(parent);
+    }
+    matplotlibcpp::save(filename);
+    PRINT_INFO("Saved RPY Error plot to: %s\n", filename.c_str());
+  }
   matplotlibcpp::show(true);
 
 #endif

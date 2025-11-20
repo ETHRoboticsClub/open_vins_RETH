@@ -20,6 +20,7 @@
  */
 
 #include "ROS2Visualizer.h"
+#include <rmw/qos_profiles.h>
 
 #include "core/VioManager.h"
 #include "ros/ROSVisualizerHelper.h"
@@ -169,6 +170,66 @@ ROS2Visualizer::ROS2Visualizer(std::shared_ptr<rclcpp::Node> node, std::shared_p
   }
 }
 
+// void ROS2Visualizer::setup_subscribers(std::shared_ptr<ov_core::YamlParser> parser) {
+
+//   // We need a valid parser
+//   assert(parser != nullptr);
+
+//   // Create imu subscriber (handle legacy ros param info)
+//   std::string topic_imu;
+//   _node->declare_parameter<std::string>("topic_imu", "/imu0");
+//   _node->get_parameter("topic_imu", topic_imu);
+//   parser->parse_external("relative_config_imu", "imu0", "rostopic", topic_imu);
+//   sub_imu = _node->create_subscription<sensor_msgs::msg::Imu>(topic_imu, rclcpp::SensorDataQoS(),
+//                                                               std::bind(&ROS2Visualizer::callback_inertial, this, std::placeholders::_1));
+//   PRINT_INFO("subscribing to IMU: %s\n", topic_imu.c_str());
+
+//   // Logic for sync stereo subscriber
+//   // https://answers.ros.org/question/96346/subscribe-to-two-image_raws-with-one-function/?answer=96491#post-id-96491
+//   if (_app->get_params().state_options.num_cameras == 2) {
+//     // Read in the topics
+//     std::string cam_topic0, cam_topic1;
+//     _node->declare_parameter<std::string>("topic_camera" + std::to_string(0), "/cam" + std::to_string(0) + "/image_raw");
+//     _node->get_parameter("topic_camera" + std::to_string(0), cam_topic0);
+//     _node->declare_parameter<std::string>("topic_camera" + std::to_string(1), "/cam" + std::to_string(1) + "/image_raw");
+//     _node->get_parameter("topic_camera" + std::to_string(1), cam_topic1);
+//     parser->parse_external("relative_config_imucam", "cam" + std::to_string(0), "rostopic", cam_topic0);
+//     parser->parse_external("relative_config_imucam", "cam" + std::to_string(1), "rostopic", cam_topic1);
+//     // Create sync filter (they have unique pointers internally, so we have to use move logic here...)
+//     // Use sensor data QoS to match typical image publishers (best_effort, low latency)
+//     auto image_sub0 = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(
+//         _node, cam_topic0, rmw_qos_profile_sensor_data);
+//     auto image_sub1 = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(
+//         _node, cam_topic1, rmw_qos_profile_sensor_data);
+//     auto sync = std::make_shared<message_filters::Synchronizer<sync_pol>>(sync_pol(10), *image_sub0, *image_sub1);
+//     sync->registerCallback(std::bind(&ROS2Visualizer::callback_stereo, this, std::placeholders::_1, std::placeholders::_2, 0, 1));
+//     // sync->registerCallback([](const sensor_msgs::msg::Image::SharedPtr msg0, const sensor_msgs::msg::Image::SharedPtr msg1)
+//     // {callback_stereo(msg0, msg1, 0, 1);});
+//     // sync->registerCallback(&callback_stereo2); // since the above two alternatives fail to compile for some reason
+//     // Append to our vector of subscribers
+//     sync_cam.push_back(sync);
+//     sync_subs_cam.push_back(image_sub0);
+//     sync_subs_cam.push_back(image_sub1);
+//     PRINT_INFO("subscribing to cam (stereo): %s\n", cam_topic0.c_str());
+//     PRINT_INFO("subscribing to cam (stereo): %s\n", cam_topic1.c_str());
+//   } else {
+//     // Now we should add any non-stereo callbacks here
+//     for (int i = 0; i < _app->get_params().state_options.num_cameras; i++) {
+//       // read in the topic
+//       std::string cam_topic;
+//       _node->declare_parameter<std::string>("topic_camera" + std::to_string(i), "/cam" + std::to_string(i) + "/image_raw");
+//       _node->get_parameter("topic_camera" + std::to_string(i), cam_topic);
+//       parser->parse_external("relative_config_imucam", "cam" + std::to_string(i), "rostopic", cam_topic);
+//       // create subscriber with SensorData QoS
+//       auto sub = _node->create_subscription<sensor_msgs::msg::Image>(
+//           cam_topic, rclcpp::SensorDataQoS(),
+//           [this, i](const sensor_msgs::msg::Image::SharedPtr msg0) { callback_monocular(msg0, i); });
+//       subs_cam.push_back(sub);
+//       PRINT_INFO("subscribing to cam (mono): %s\n", cam_topic.c_str());
+//     }
+//   }
+// }
+
 void ROS2Visualizer::setup_subscribers(std::shared_ptr<ov_core::YamlParser> parser) {
 
   // We need a valid parser
@@ -179,12 +240,21 @@ void ROS2Visualizer::setup_subscribers(std::shared_ptr<ov_core::YamlParser> pars
   _node->declare_parameter<std::string>("topic_imu", "/imu0");
   _node->get_parameter("topic_imu", topic_imu);
   parser->parse_external("relative_config_imu", "imu0", "rostopic", topic_imu);
-  sub_imu = _node->create_subscription<sensor_msgs::msg::Imu>(topic_imu, rclcpp::SensorDataQoS(),
-                                                              std::bind(&ROS2Visualizer::callback_inertial, this, std::placeholders::_1));
-  PRINT_INFO("subscribing to IMU: %s\n", topic_imu.c_str());
+
+  // We use 2000 to absorb "bursts" from the bag player without dropping packets.
+  // We keep it "Best Effort" to be compatible with any publisher, 
+  // but you could force .reliable() if you know your bag is reliable.
+  rclcpp::QoS qos_imu(2000); 
+  qos_imu.best_effort(); 
+
+  sub_imu = _node->create_subscription<sensor_msgs::msg::Imu>(
+      topic_imu, 
+      qos_imu, // <--- CHANGED from SensorDataQoS()
+      std::bind(&ROS2Visualizer::callback_inertial, this, std::placeholders::_1));
+  
+  PRINT_INFO("subscribing to IMU: %s (Queue: 2000)\n", topic_imu.c_str());
 
   // Logic for sync stereo subscriber
-  // https://answers.ros.org/question/96346/subscribe-to-two-image_raws-with-one-function/?answer=96491#post-id-96491
   if (_app->get_params().state_options.num_cameras == 2) {
     // Read in the topics
     std::string cam_topic0, cam_topic1;
@@ -194,15 +264,22 @@ void ROS2Visualizer::setup_subscribers(std::shared_ptr<ov_core::YamlParser> pars
     _node->get_parameter("topic_camera" + std::to_string(1), cam_topic1);
     parser->parse_external("relative_config_imucam", "cam" + std::to_string(0), "rostopic", cam_topic0);
     parser->parse_external("relative_config_imucam", "cam" + std::to_string(1), "rostopic", cam_topic1);
-    // Create sync filter (they have unique pointers internally, so we have to use move logic here...)
-    auto image_sub0 = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(_node, cam_topic0);
-    auto image_sub1 = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(_node, cam_topic1);
-    auto sync = std::make_shared<message_filters::Synchronizer<sync_pol>>(sync_pol(10), *image_sub0, *image_sub1);
+    
+    
+    // Standard SensorDataQoS is too shallow (5). We make a custom profile with depth 50.
+    rmw_qos_profile_t qos_cam_profile = rmw_qos_profile_sensor_data;
+    qos_cam_profile.depth = 50; // Increase from 5 to 50
+
+    auto image_sub0 = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(
+        _node, cam_topic0, qos_cam_profile); // <--- CHANGED
+    auto image_sub1 = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(
+        _node, cam_topic1, qos_cam_profile); // <--- CHANGED
+
+    // Increased from 10 to 20 to handle larger time offsets between left/right cams
+    auto sync = std::make_shared<message_filters::Synchronizer<sync_pol>>(sync_pol(20), *image_sub0, *image_sub1);
+    
     sync->registerCallback(std::bind(&ROS2Visualizer::callback_stereo, this, std::placeholders::_1, std::placeholders::_2, 0, 1));
-    // sync->registerCallback([](const sensor_msgs::msg::Image::SharedPtr msg0, const sensor_msgs::msg::Image::SharedPtr msg1)
-    // {callback_stereo(msg0, msg1, 0, 1);});
-    // sync->registerCallback(&callback_stereo2); // since the above two alternatives fail to compile for some reason
-    // Append to our vector of subscribers
+    
     sync_cam.push_back(sync);
     sync_subs_cam.push_back(image_sub0);
     sync_subs_cam.push_back(image_sub1);
@@ -211,16 +288,19 @@ void ROS2Visualizer::setup_subscribers(std::shared_ptr<ov_core::YamlParser> pars
   } else {
     // Now we should add any non-stereo callbacks here
     for (int i = 0; i < _app->get_params().state_options.num_cameras; i++) {
-      // read in the topic
       std::string cam_topic;
       _node->declare_parameter<std::string>("topic_camera" + std::to_string(i), "/cam" + std::to_string(i) + "/image_raw");
       _node->get_parameter("topic_camera" + std::to_string(i), cam_topic);
       parser->parse_external("relative_config_imucam", "cam" + std::to_string(i), "rostopic", cam_topic);
-      // create subscriber
-      // auto sub = _node->create_subscription<sensor_msgs::msg::Image>(
-      //    cam_topic, rclcpp::SensorDataQoS(), std::bind(&ROS2Visualizer::callback_monocular, this, std::placeholders::_1, i));
+      
+      // --- FIX 4: Deepen Image Queue for Mono ---
+      rclcpp::QoS qos_cam_mono(50);
+      qos_cam_mono.best_effort();
+
       auto sub = _node->create_subscription<sensor_msgs::msg::Image>(
-          cam_topic, 10, [this, i](const sensor_msgs::msg::Image::SharedPtr msg0) { callback_monocular(msg0, i); });
+          cam_topic, 
+          qos_cam_mono, // <--- CHANGED from SensorDataQoS()
+          [this, i](const sensor_msgs::msg::Image::SharedPtr msg0) { callback_monocular(msg0, i); });
       subs_cam.push_back(sub);
       PRINT_INFO("subscribing to cam (mono): %s\n", cam_topic.c_str());
     }

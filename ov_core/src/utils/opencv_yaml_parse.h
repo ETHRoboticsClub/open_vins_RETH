@@ -129,9 +129,19 @@ public:
     }
 #elif ROS_AVAILABLE == 2
     if (node != nullptr && node->has_parameter(node_name)) {
-      PRINT_INFO(GREEN "overriding node " BOLDGREEN "%s" RESET GREEN " with value from ROS!\n" RESET, node_name.c_str());
-      node->get_parameter<T>(node_name, node_result);
-      return;
+      // Try to fetch with the requested type. If type mismatches (e.g., string "2"),
+      // get_parameter will return false. In that case, fall back to YAML instead of
+      // silently returning with an unchanged default.
+      T tmp = node_result;
+      bool ok = node->get_parameter<T>(node_name, tmp);
+      if (ok) {
+        PRINT_INFO(GREEN "overriding node " BOLDGREEN "%s" RESET GREEN " with value from ROS!\n" RESET, node_name.c_str());
+        node_result = tmp;
+        return;
+      } else {
+        PRINT_WARNING(YELLOW "parameter '%s' present in ROS2 overrides but type mismatched; falling back to YAML config\n" RESET,
+                      node_name.c_str());
+      }
     }
 #endif
 
@@ -168,9 +178,16 @@ public:
 #elif ROS_AVAILABLE == 2
     std::string rosnode = sensor_name + "_" + node_name;
     if (node != nullptr && node->has_parameter(rosnode)) {
-      PRINT_INFO(GREEN "overriding node " BOLDGREEN "%s" RESET GREEN " with value from ROS!\n" RESET, rosnode.c_str());
-      node->get_parameter<T>(rosnode, node_result);
-      return;
+      T tmp = node_result;
+      bool ok = node->get_parameter<T>(rosnode, tmp);
+      if (ok) {
+        PRINT_INFO(GREEN "overriding node " BOLDGREEN "%s" RESET GREEN " with value from ROS!\n" RESET, rosnode.c_str());
+        node_result = tmp;
+        return;
+      } else {
+        PRINT_WARNING(YELLOW "parameter '%s' present in ROS2 overrides but type mismatched; falling back to YAML config\n" RESET,
+                      rosnode.c_str());
+      }
     }
 #endif
 
@@ -213,11 +230,16 @@ public:
     std::string rosnode = sensor_name + "_" + node_name;
     std::vector<double> matrix_RCtoI;
     if (node != nullptr && node->has_parameter(rosnode)) {
-      PRINT_INFO(GREEN "overriding node " BOLDGREEN "%s" RESET GREEN " with value from ROS!\n" RESET, rosnode.c_str());
-      node->get_parameter<std::vector<double>>(rosnode, matrix_RCtoI);
-      node_result << matrix_RCtoI.at(0), matrix_RCtoI.at(1), matrix_RCtoI.at(2), matrix_RCtoI.at(3), matrix_RCtoI.at(4), matrix_RCtoI.at(5),
-          matrix_RCtoI.at(6), matrix_RCtoI.at(7), matrix_RCtoI.at(8);
-      return;
+      bool ok = node->get_parameter<std::vector<double>>(rosnode, matrix_RCtoI);
+      if (ok) {
+        PRINT_INFO(GREEN "overriding node " BOLDGREEN "%s" RESET GREEN " with value from ROS!\n" RESET, rosnode.c_str());
+        node_result << matrix_RCtoI.at(0), matrix_RCtoI.at(1), matrix_RCtoI.at(2), matrix_RCtoI.at(3), matrix_RCtoI.at(4), matrix_RCtoI.at(5),
+            matrix_RCtoI.at(6), matrix_RCtoI.at(7), matrix_RCtoI.at(8);
+        return;
+      } else {
+        PRINT_WARNING(YELLOW "parameter '%s' present in ROS2 overrides but type mismatched; falling back to YAML config\n" RESET,
+                      rosnode.c_str());
+      }
     }
 #endif
 
@@ -261,12 +283,17 @@ public:
     std::string rosnode = sensor_name + "_" + node_name;
     std::vector<double> matrix_TCtoI;
     if (node != nullptr && node->has_parameter(rosnode)) {
-      PRINT_INFO(GREEN "overriding node " BOLDGREEN "%s" RESET GREEN " with value from ROS!\n" RESET, rosnode.c_str());
-      node->get_parameter<std::vector<double>>(rosnode, matrix_TCtoI);
-      node_result << matrix_TCtoI.at(0), matrix_TCtoI.at(1), matrix_TCtoI.at(2), matrix_TCtoI.at(3), matrix_TCtoI.at(4), matrix_TCtoI.at(5),
-          matrix_TCtoI.at(6), matrix_TCtoI.at(7), matrix_TCtoI.at(8), matrix_TCtoI.at(9), matrix_TCtoI.at(10), matrix_TCtoI.at(11),
-          matrix_TCtoI.at(12), matrix_TCtoI.at(13), matrix_TCtoI.at(14), matrix_TCtoI.at(15);
-      return;
+      bool ok = node->get_parameter<std::vector<double>>(rosnode, matrix_TCtoI);
+      if (ok) {
+        PRINT_INFO(GREEN "overriding node " BOLDGREEN "%s" RESET GREEN " with value from ROS!\n" RESET, rosnode.c_str());
+        node_result << matrix_TCtoI.at(0), matrix_TCtoI.at(1), matrix_TCtoI.at(2), matrix_TCtoI.at(3), matrix_TCtoI.at(4), matrix_TCtoI.at(5),
+            matrix_TCtoI.at(6), matrix_TCtoI.at(7), matrix_TCtoI.at(8), matrix_TCtoI.at(9), matrix_TCtoI.at(10), matrix_TCtoI.at(11),
+            matrix_TCtoI.at(12), matrix_TCtoI.at(13), matrix_TCtoI.at(14), matrix_TCtoI.at(15);
+        return;
+      } else {
+        PRINT_WARNING(YELLOW "parameter '%s' present in ROS2 overrides but type mismatched; falling back to YAML config\n" RESET,
+                      rosnode.c_str());
+      }
     }
 #endif
 
@@ -280,10 +307,15 @@ public:
   void parse_config(const std::string &node_name, int &node_result, bool required = true) {
     int64_t val = node_result;
     if (node != nullptr && node->has_parameter(node_name)) {
-      PRINT_INFO(GREEN "overriding node " BOLDGREEN "%s" RESET GREEN " with value from ROS!\n" RESET, node_name.c_str());
-      node->get_parameter<int64_t>(node_name, val);
-      node_result = (int)val;
-      return;
+      bool ok = node->get_parameter<int64_t>(node_name, val);
+      if (ok) {
+        PRINT_INFO(GREEN "overriding node " BOLDGREEN "%s" RESET GREEN " with value from ROS!\n" RESET, node_name.c_str());
+        node_result = (int)val;
+        return;
+      } else {
+        PRINT_WARNING(YELLOW "parameter '%s' present in ROS2 overrides but type mismatched; falling back to YAML config\n" RESET,
+                      node_name.c_str());
+      }
     }
     parse_config_yaml(node_name, node_result, required);
   }
@@ -296,12 +328,17 @@ public:
       val.push_back(tmp);
     std::string rosnode = sensor_name + "_" + node_name;
     if (node != nullptr && node->has_parameter(rosnode)) {
-      PRINT_INFO(GREEN "overriding node " BOLDGREEN "%s" RESET GREEN " with value from ROS!\n" RESET, rosnode.c_str());
-      node->get_parameter<std::vector<int64_t>>(rosnode, val);
-      node_result.clear();
-      for (auto tmp : val)
-        node_result.push_back((int)tmp);
-      return;
+      bool ok = node->get_parameter<std::vector<int64_t>>(rosnode, val);
+      if (ok) {
+        PRINT_INFO(GREEN "overriding node " BOLDGREEN "%s" RESET GREEN " with value from ROS!\n" RESET, rosnode.c_str());
+        node_result.clear();
+        for (auto tmp : val)
+          node_result.push_back((int)tmp);
+        return;
+      } else {
+        PRINT_WARNING(YELLOW "parameter '%s' present in ROS2 overrides but type mismatched; falling back to YAML config\n" RESET,
+                      rosnode.c_str());
+      }
     }
     parse_external_yaml(external_node_name, sensor_name, node_name, node_result, required);
   }

@@ -89,11 +89,30 @@ int main(int argc, char **argv) {
   // Verbosity setting
   ov_core::Printer::setPrintLevel("INFO");
 
+  // Parse command line arguments for save option
+  std::string save_prefix = "";
+  std::vector<std::string> file_args;
+  for (int i = 1; i < argc; i++) {
+    std::string arg = argv[i];
+    if (arg == "--save" || arg == "-s") {
+      if (i + 1 < argc) {
+        save_prefix = argv[i + 1];
+        i++; // Skip the next argument as it's the prefix value
+      } else {
+        PRINT_ERROR(RED "ERROR: --save requires a prefix argument\n" RESET);
+        std::exit(EXIT_FAILURE);
+      }
+    } else {
+      file_args.push_back(arg);
+    }
+  }
+
   // Ensure we have a path
-  if (argc < 3) {
+  if (file_args.size() < 2) {
     PRINT_ERROR(RED "ERROR: Please specify a align mode and trajectory file\n" RESET);
-    PRINT_ERROR(RED "ERROR: ./plot_trajectories <align_mode> <file_gt.txt> <file_est1.txt> ...  <file_est9.txt>\n" RESET);
-    PRINT_ERROR(RED "ERROR: rosrun ov_eval plot_trajectories <align_mode> <file_gt.txt> <file_est1.txt> ...  <file_est9.txt>\n" RESET);
+    PRINT_ERROR(RED "ERROR: ./plot_trajectories <align_mode> <file_gt.txt> <file_est1.txt> ...  <file_est9.txt> [--save <prefix>]\n" RESET);
+    PRINT_ERROR(RED "ERROR: rosrun ov_eval plot_trajectories <align_mode> <file_gt.txt> <file_est1.txt> ...  <file_est9.txt> [--save <prefix>]\n" RESET);
+    PRINT_ERROR(RED "ERROR: If --save is provided, figures will be saved with the given prefix\n" RESET);
     std::exit(EXIT_FAILURE);
   }
 
@@ -101,16 +120,16 @@ int main(int argc, char **argv) {
   std::vector<std::string> names;
   std::vector<std::vector<double>> times;
   std::vector<std::vector<Eigen::Matrix<double, 7, 1>>> poses;
-  for (int i = 2; i < argc; i++) {
+  for (size_t i = 1; i < file_args.size(); i++) {
 
     // Read in trajectory data
     std::vector<double> times_temp;
     std::vector<Eigen::Matrix<double, 7, 1>> poses_temp;
     std::vector<Eigen::Matrix3d> cov_ori_temp, cov_pos_temp;
-    ov_eval::Loader::load_data(argv[i], times_temp, poses_temp, cov_ori_temp, cov_pos_temp);
+    ov_eval::Loader::load_data(file_args[i].c_str(), times_temp, poses_temp, cov_ori_temp, cov_pos_temp);
 
     // Align all the non-groundtruth trajectories to the base one
-    if (i > 2) {
+    if (i > 1) {
 
       // Intersect timestamps
       std::vector<double> gt_times_temp(times.at(0));
@@ -128,7 +147,7 @@ int main(int argc, char **argv) {
       Eigen::Matrix3d R_ESTtoGT;
       Eigen::Vector3d t_ESTinGT;
       double s_ESTtoGT;
-      ov_eval::AlignTrajectory::align_trajectory(poses_temp, gt_poses_temp, R_ESTtoGT, t_ESTinGT, s_ESTtoGT, argv[1]);
+      ov_eval::AlignTrajectory::align_trajectory(poses_temp, gt_poses_temp, R_ESTtoGT, t_ESTinGT, s_ESTtoGT, file_args[0].c_str());
 
       // Debug print to the user
       Eigen::Vector4d q_ESTtoGT = ov_core::rot_2_quat(R_ESTtoGT);
@@ -149,7 +168,7 @@ int main(int argc, char **argv) {
     }
 
     // Debug print the length stats
-    boost::filesystem::path path(argv[i]);
+    boost::filesystem::path path(file_args[i]);
     std::string name = path.stem().string();
     double length = ov_eval::Loader::get_total_length(poses_temp);
     PRINT_INFO("[COMP]: %d poses in %s => length of %.2f meters\n", (int)times_temp.size(), name.c_str(), length);
@@ -178,6 +197,17 @@ int main(int argc, char **argv) {
   matplotlibcpp::xlabel("x-axis (m)");
   matplotlibcpp::ylabel("y-axis (m)");
   matplotlibcpp::tight_layout();
+  if (!save_prefix.empty()) {
+    std::string filename = save_prefix + "_trajectory_xy.png";
+    // Create directory if it doesn't exist
+    boost::filesystem::path filepath(filename);
+    boost::filesystem::path parent = filepath.parent_path();
+    if (!parent.empty() && parent.string() != ".") {
+      boost::filesystem::create_directories(parent);
+    }
+    matplotlibcpp::save(filename);
+    PRINT_INFO("Saved XY trajectory plot to: %s\n", filename.c_str());
+  }
   matplotlibcpp::show(false);
 
   // Plot this figure
@@ -203,6 +233,17 @@ int main(int argc, char **argv) {
   matplotlibcpp::xlim(0.0, endtime - starttime);
   matplotlibcpp::legend();
   matplotlibcpp::tight_layout();
+  if (!save_prefix.empty()) {
+    std::string filename = save_prefix + "_trajectory_z.png";
+    // Create directory if it doesn't exist
+    boost::filesystem::path filepath(filename);
+    boost::filesystem::path parent = filepath.parent_path();
+    if (!parent.empty() && parent.string() != ".") {
+      boost::filesystem::create_directories(parent);
+    }
+    matplotlibcpp::save(filename);
+    PRINT_INFO("Saved Z trajectory plot to: %s\n", filename.c_str());
+  }
   matplotlibcpp::show(true);
 
 #endif
